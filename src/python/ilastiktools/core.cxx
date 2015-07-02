@@ -46,11 +46,10 @@
 #include <boost/tuple/tuple.hpp>
 #include <boost/functional/hash.hpp>
 
-/*vigra*/
+// vigra
 #include <ilastiktools/carving.hxx>
 
-
-/*vigra python */
+// vigra python
 #include <vigra/numpy_array.hxx>
 #include <vigra/numpy_array_converters.hxx>
 
@@ -60,108 +59,103 @@
 // #include "export_graph_shortest_path_visitor.hxx"
 // #include "export_graph_hierarchical_clustering_visitor.hxx"
 
-
-
 namespace python = boost::python;
-
-namespace vigra{
-
-
-
-} // namespace vigra
 
 using namespace vigra;
 using namespace boost::python;
 
 
 template<unsigned int DIM, class LABEL_TYPE>
-void pyAssignLabels(
-    GridRag<DIM, LABEL_TYPE> & graph,
-    const NumpyArray<DIM, LABEL_TYPE> & labels
-){
-    graph.assignLabels(labels);
+void pyAssignLabels( GridRag<DIM, LABEL_TYPE>& graph
+                   , const NumpyArray<DIM, LABEL_TYPE>& labels
+                   , const TinyVector<MultiArrayIndex, DIM>& roiEnd )
+{
+    graph.assignLabels(labels, roiEnd);
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 void pyAssignLabelsFromSerialization(
-    GridRag<DIM, LABEL_TYPE> & graph,
-    const NumpyArray<DIM, LABEL_TYPE> & labels,
-    NumpyArray<1, UInt32> serialization 
-){
-    graph.assignLabelsFromSerialization(labels, serialization);
+      GridRag<DIM, LABEL_TYPE>& graph
+    , const NumpyArray<1, UInt32>& serialization )
+{
+    graph.assignLabelsFromSerialization(serialization);
 }
 
-
-
-template<unsigned int DIM, class LABEL_TYPE,
-         class FEATURES_IN>
+template<unsigned int DIM, class LABEL_TYPE, class FEATURES_IN>
 NumpyAnyArray pyAccumulateEdgeFeatures(
-    GridRag<DIM, LABEL_TYPE> & graph,
-    const NumpyArray<DIM, FEATURES_IN> & featuresIn,
-    NumpyArray<1, typename NumericTraits<FEATURES_IN>::RealPromote > out 
-){
+    GridRag<DIM, LABEL_TYPE>& graph
+  , const NumpyArray<DIM, LABEL_TYPE>& labels
+  , const NumpyArray<DIM, FEATURES_IN>& featuresIn
+  , const TinyVector<MultiArrayIndex, DIM>& roiEnd
+  , NumpyArray<1, typename NumericTraits<FEATURES_IN>::RealPromote> featuresOut
+  , NumpyArray<1, UInt32>& featureCountsOut )
+{
     typedef TinyVector<MultiArrayIndex, 1>  Shape1;
     Shape1 shape(graph.edgeNum());
-    out.reshapeIfEmpty(shape);
-    graph.accumulateEdgeFeatures(featuresIn, out);
-    return out;
+    featuresOut.reshapeIfEmpty(shape);
+    featureCountsOut.reshapeIfEmpty(shape);
+
+    graph.accumulateEdgeFeatures( labels, featuresIn, roiEnd
+                                , featuresOut, featureCountsOut );
+    return featuresOut;
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 void pyPreprocessing(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<DIM, LABEL_TYPE> & labels,
-    const NumpyArray<DIM, float> & weightArray      
-){
-    gridSegmentor.preprocessing(labels, weightArray);
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<DIM, LABEL_TYPE>& labels
+  , const NumpyArray<DIM, float>& weightArray
+  , const TinyVector<MultiArrayIndex, DIM>& roiEnd )
+{
+    gridSegmentor.preprocessing(labels, weightArray, roiEnd);
 }
 
-
 template<unsigned int DIM, class LABEL_TYPE>
-void pyPreprocessingFromSerialization(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<DIM, LABEL_TYPE> & labels,
-    const NumpyArray<1, LABEL_TYPE> & serialization,
-    const NumpyArray<1, float> & edgeWeights,
-    const NumpyArray<1, UInt8> & nodeSeeds,
-    const NumpyArray<1, UInt8> & resultSegmentation
-){
-    gridSegmentor.preprocessingFromSerialization(labels, serialization,
-                                                 edgeWeights, nodeSeeds,
-                                                 resultSegmentation);
+void pyInitFromSerialization(
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<1, LABEL_TYPE>& serialization
+  , const NumpyArray<1, float>& edgeWeights
+  , const NumpyArray<1, UInt8>& nodeSeeds
+  , const NumpyArray<1, UInt8>& resultSegmentation )
+{
+    gridSegmentor.initFromSerialization(serialization,
+                                        edgeWeights, nodeSeeds,
+                                        resultSegmentation);
 }
 
-
-
-
-
-
+template<unsigned int DIM, class LABEL_TYPE>
+void pyAddSeeds(
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<DIM, LABEL_TYPE>& labels
+  , const TinyVector<MultiArrayIndex, DIM>& labelsOffset
+  , const NumpyArray<2, Int64>& fgSeeds
+  , const NumpyArray<2, Int64>& bgSeeds )
+{
+    gridSegmentor.addSeeds(labels, labelsOffset, fgSeeds, bgSeeds);
+}
 
 template<unsigned int DIM, class LABEL_TYPE>
-void pyAddLabels(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<DIM, UInt8> & brushStroke,
-    const TinyVector<MultiArrayIndex, DIM> roiBegin,
-    const TinyVector<MultiArrayIndex, DIM> roiEnd,
-    const UInt8 maxValidLabel
-){
-    gridSegmentor.addLabels(brushStroke, roiBegin, roiEnd, maxValidLabel);;
+void pyAddSeedBlock(
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<DIM, LABEL_TYPE>& labels
+  , const NumpyArray<DIM, UInt8>& brushStroke )
+{
+    gridSegmentor.addSeedBlock(labels, brushStroke);
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyGetSegmentation(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const TinyVector<MultiArrayIndex, DIM> roiBegin,
-    const TinyVector<MultiArrayIndex, DIM> roiEnd,
-    NumpyArray<DIM, UInt8>  segmentation
-){
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<DIM, LABEL_TYPE>& labels
+  , NumpyArray<DIM, UInt8>  segmentation )
+{
     typedef TinyVector<MultiArrayIndex, DIM>  ShapeN;
-    ShapeN shape(roiEnd-roiBegin);
+    ShapeN shape(labels.shape());
     segmentation.reshapeIfEmpty(shape);
 
     {
         PyAllowThreads _pythread;
-        gridSegmentor.getSegmentation(roiBegin, roiEnd, segmentation);
+        gridSegmentor.getSegmentation(labels, segmentation);
     }
    
     return segmentation;
@@ -170,9 +164,9 @@ NumpyAnyArray pyGetSegmentation(
 
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyGetSuperVoxelSeg(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, UInt8>  segmentation
-){
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, UInt8>  segmentation )
+{
     typedef TinyVector<MultiArrayIndex, 1>  Shape1;
     Shape1 shape(gridSegmentor.maxNodeId()+1);
     segmentation.reshapeIfEmpty(shape);
@@ -187,9 +181,9 @@ NumpyAnyArray pyGetSuperVoxelSeg(
 
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyGetSuperVoxelSeeds(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, UInt8>  seeds
-){
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, UInt8>  seeds )
+{
     typedef TinyVector<MultiArrayIndex, 1>  Shape1;
     Shape1 shape(gridSegmentor.maxNodeId()+1);
     seeds.reshapeIfEmpty(shape);
@@ -203,165 +197,149 @@ NumpyAnyArray pyGetSuperVoxelSeeds(
 }
 
 
-
-
-
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pySerializeGraph(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, UInt32> serialization 
-){
-    serialization.reshapeIfEmpty( NumpyArray<1, UInt32>::difference_type(gridSegmentor.graph().serializationSize()));
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, UInt32> serialization )
+{
+    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
+
+    serialization.reshapeIfEmpty(DifferenceType(gridSegmentor.graph().serializationSize()));
     gridSegmentor.graph().serialize(serialization.begin());
     return serialization;
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 void pyDeserializeGraph(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<1, UInt32> & serialization 
-){
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<1, UInt32>& serialization )
+{
     gridSegmentor.graph().clear();
     gridSegmentor.graph().deserialize(serialization.begin(),serialization.end());
 }
 
-
-
-
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyEdgeWeights(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, float> out
-){
-    out.reshapeIfEmpty( 
-        NumpyArray<1, UInt32>::difference_type(gridSegmentor.edgeNum())
-    );
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, float> out )
+{
+    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
+
+    out.reshapeIfEmpty(DifferenceType(gridSegmentor.edgeNum()));
     out = gridSegmentor.edgeWeights();
     return out;
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyNodeSeeds(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, UInt8> out
-){
-    out.reshapeIfEmpty( 
-        NumpyArray<1, UInt32>::difference_type(gridSegmentor.maxNodeId()+1)
-    );
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, UInt8> out )
+{
+    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
+
+    out.reshapeIfEmpty(DifferenceType(gridSegmentor.maxNodeId()+1));
     out = gridSegmentor.nodeSeeds();
     return out;
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyGetResultSegmentation(
-    const GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    NumpyArray<1, UInt8> out
-){
-    out.reshapeIfEmpty( 
-        NumpyArray<1, UInt32>::difference_type(gridSegmentor.maxNodeId()+1)
-    );
+    const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , NumpyArray<1, UInt8> out )
+{
+    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
+
+    out.reshapeIfEmpty(DifferenceType(gridSegmentor.maxNodeId()+1));
     out = gridSegmentor.resultSegmentation();
     return out;
 }
 
-
-
-template<unsigned int DIM, class LABEL_TYPE>
-void pySetSeeds(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<2, Int64> & fgSeeds,
-    const NumpyArray<2, Int64> & bgSeeds
-){
-    gridSegmentor.setSeeds(fgSeeds, bgSeeds);
-}
-
 template<unsigned int DIM, class LABEL_TYPE>
 void pySetResulFgObj(
-    GridSegmentor<DIM , LABEL_TYPE, float> & gridSegmentor,
-    const NumpyArray<1, Int64> & fgNodes
-){
+    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
+  , const NumpyArray<1, Int64>& fgNodes )
+{
     gridSegmentor.setResulFgObj(fgNodes);
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
 void defineGridRag(const std::string & clsName){
-
-
     typedef GridRag<DIM, LABEL_TYPE> Graph;
-
     python::class_<Graph>(clsName.c_str(),python::init<  >())
-        //.def("__init__",python::make_constructor(&pyGridGraphFactory3d<DIM,boost_graph::undirected_tag>))
-        //.def(LemonUndirectedGraphCoreVisitor<Graph>(clsName))
-        //.def(LemonGraphAlgorithmVisitor<Graph>(clsName))
-        // my functions
-        .def("assignLabels",registerConverters(&pyAssignLabels<DIM, LABEL_TYPE>))
+        .def("assignLabels",
+            registerConverters(&pyAssignLabels<DIM, LABEL_TYPE>),
+            (
+                python::arg("labels")
+              , python::arg("roiEnd")
+            )
+        )
         .def("accumulateEdgeFeatures", 
             registerConverters(&pyAccumulateEdgeFeatures<DIM, LABEL_TYPE, float>),
             (
-                python::arg("features"),
-                python::arg("out") = python::object()
+                python::arg("labels")
+              , python::arg("featuresIn")
+              , python::arg("roiEnd")
+              , python::arg("featuresOut") = python::object()
+              , python::arg("featureCountsOut") = python::object()
             )
         )
-
     ;
 }
 
-
-
-
 template<unsigned int DIM, class LABEL_TYPE>
-void defineGridSegmentor(const std::string & clsName){
-
-
+void defineGridSegmentor(const std::string & clsName)
+{
     typedef GridSegmentor<DIM, LABEL_TYPE, float> Segmentor;
 
     python::class_<Segmentor>(clsName.c_str(),python::init<  >())
         .def("preprocessing", 
             registerConverters( & pyPreprocessing<DIM, LABEL_TYPE>),
             (
-                python::arg("labels"),
-                python::arg("weightArray")
+                python::arg("labels")
+              , python::arg("weightArray")
+              , python::arg("roiEnd")
             )
         )
-        .def("preprocessingFromSerialization", 
-            registerConverters( & pyPreprocessingFromSerialization<DIM, LABEL_TYPE>),
+        .def("init", &Segmentor::init)
+        .def("initFromSerialization",
+            registerConverters( & pyInitFromSerialization<DIM, LABEL_TYPE>),
             (
-                python::arg("labels"),
-                python::arg("serialization"),
-                python::arg("edgeWeights"),
-                python::arg("nodeSeeds"),
-                python::arg("resultSegmentation")
+                python::arg("serialization")
+              , python::arg("edgeWeights")
+              , python::arg("nodeSeeds")
+              , python::arg("resultSegmentation")
             )
         )
-        .def("addSeeds", 
-            registerConverters( & pyAddLabels<DIM, LABEL_TYPE>),
+
+        .def("clearSeeds",&Segmentor::clearSeeds)
+        .def("addSeedBlock",
+            registerConverters( & pyAddSeedBlock<DIM, LABEL_TYPE>),
             (
-                python::arg("brushStroke"),
-                python::arg("roiBegin"),
-                python::arg("roiEnd"),
-                python::arg("maxValidLabel")
+                python::arg("labels")
+              , python::arg("brushStroke")
             )
         )
-        .def("setSeeds", 
-            registerConverters( & pySetSeeds<DIM, LABEL_TYPE>),
+        .def("addSeeds",
+            registerConverters( & pyAddSeeds<DIM, LABEL_TYPE>),
             (
-                python::arg("fgSeeds"),
-                python::arg("bgSeeds")
+                 python::arg("labels")
+               , python::arg("labelsOffset")
+               , python::arg("fgSeeds")
+               , python::arg("bgSeeds")
             )
         )
+        .def("clearSegmentation",&Segmentor::clearSegmentation)
         .def("setResulFgObj", 
             registerConverters( & pySetResulFgObj<DIM, LABEL_TYPE>),
             (
                 python::arg("fgNodes")
             )
         )
-
         .def("getSegmentation", 
             registerConverters( & pyGetSegmentation<DIM, LABEL_TYPE>),
             (
-                python::arg("roiBegin"),
-                python::arg("roiEnd"),
-                python::arg("out") = python::object()
+                python::arg("labels")
+              , python::arg("out") = python::object()
             )
         )
         .def("nodeNum",&Segmentor::nodeNum)
@@ -369,8 +347,6 @@ void defineGridSegmentor(const std::string & clsName){
         .def("maxNodeId",&Segmentor::maxNodeId)
         .def("maxEdgeId",&Segmentor::maxEdgeId)
         .def("run",&Segmentor::run)
-        .def("clearSeeds",&Segmentor::clearSeeds)
-        .def("clearSegmentation",&Segmentor::clearSegmentation)
         .def("serializeGraph", registerConverters(&pySerializeGraph<DIM, LABEL_TYPE>),
             (
                 python::arg("out") = python::object()
@@ -643,18 +619,14 @@ python::dict line_segments_for_labels( NumpyArray<2, UInt32> label_img )
     return ret;
 }
 
-
-
 BOOST_PYTHON_MODULE_INIT(_core)
 {
     import_vigranumpy();
 
     python::docstring_options doc_options(true, true, false);
 
-
     defineGridRag<2, vigra::UInt32>("GridRag_2D_UInt32");
     defineGridSegmentor<2, vigra::UInt32>("GridSegmentor_2D_UInt32");
-
 
     defineGridRag<3, vigra::UInt32>("GridRag_3D_UInt32");
     defineGridSegmentor<3, vigra::UInt32>("GridSegmentor_3D_UInt32");

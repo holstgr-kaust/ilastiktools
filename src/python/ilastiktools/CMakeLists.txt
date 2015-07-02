@@ -3,8 +3,10 @@
 #--------------------------------------------------------------
 # Add Library
 #--------------------------------------------------------------
+file(GLOB_RECURSE headers ${CMAKE_SOURCE_DIR}/include/*.hxx ${CMAKE_CURRENT_SOURCE_DIR}/*.hxx)
+
 add_library( _core SHARED
-    core.cxx
+    core.cxx ${headers}
 )
 #--------------------------------------------------------------
 # Link libraries

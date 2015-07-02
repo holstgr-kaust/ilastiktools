@@ -1,3 +1,6 @@
+# Per-User configs
+CMakeLists.txt.user
+
 # Compiled Object files
 *.slo
 *.lo
