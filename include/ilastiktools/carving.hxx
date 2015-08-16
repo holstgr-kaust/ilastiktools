@@ -173,8 +173,9 @@ namespace vigra
             for(size_t y=0; y<roiEnd[1]; ++y)
             for(size_t x=0; x<roiEnd[0]; ++x)
             {
+                // TODO: do we need to increase label values by 1 to match previous behaviour?
                 const LabelType l  = labels(x, y);
-                if(x+1 < shape[0] )
+                if(x+1 < shape[0])
                     maybeAddEdge(l, labels(x+1, y));
                 if(y+1 < shape[1])
                     maybeAddEdge(l, labels(x, y+1));
@@ -191,8 +192,9 @@ namespace vigra
             for(size_t y=0; y<roiEnd[1]; ++y)
             for(size_t x=0; x<roiEnd[0]; ++x)
             {
+                // TODO: do we need to increase label values by 1 to match previous behaviour?
                 const LabelType l  = labels(x, y, z);
-                if(x+1 < shape[0] )
+                if(x+1 < shape[0])
                     maybeAddEdge(l, labels(x+1, y, z));
                 if(y+1 < shape[1])
                     maybeAddEdge(l, labels(x, y+1, z));
@@ -301,7 +303,8 @@ namespace vigra
                 if(x+1 < shape[0])
                 {
                     const LabelType lv = labels(x+1, y, z);
-                    if(lu!=lv){
+                    if(lu!=lv)
+                    {
                         const int eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
                         omp_set_lock(&(edgeLocks[eid]));
@@ -382,7 +385,7 @@ namespace vigra
          */
         void growNodeRange(LABELS maxLabel)
         {
-            for (LABELS id = maxNodeId() + 1; id < maxLabel; ++id)
+            for (LABELS id = nodeNum(); id <= maxLabel; ++id)
             {
                 addNode(id);
             }
@@ -494,6 +497,11 @@ namespace vigra
                           , const MultiArrayView< DIM, WEIGHTS_IN>& weightArray
                           , const ShapeN& roiEnd)
         {
+            std::cout << "preprocessing!" << std::endl;
+            std::cout << "labels:" << labels.shape() << std::endl;
+            std::cout << "weightArray:" << weightArray.shape() << std::endl;
+            std::cout << "roiEnd:" << roiEnd << std::endl;
+
             if (isFinalized_)
             {
                 throw std::runtime_error("Segmentor is finalized.  Too late to preprocess.");
@@ -501,20 +509,27 @@ namespace vigra
 
             //USETICTOC;
 
-            // Get the RAG
-            //std::cout<<"get RAG\n";
             //TIC;
             graph_.assignLabels(labels, roiEnd);
             //TOC;
 
+            // TODO: we should ensure previous values are preserved, and new range is initialized
             // Use RAG to reshape weights and seeds and resultSegmentation
-            edgeWeights_.reshape(Shape1(graph_.edgeNum()));
-            edgeCounts_.reshape(Shape1(graph_.edgeNum()));
-            nodeSeeds_.reshape(Shape1(graph_.maxNodeId()+ 1));
-            resultSegmentation_.reshape(Shape1(graph_.maxNodeId()+ 1));
+            MultiArray<1, VALUE_TYPE> edgeWeights_new(Shape1(graph_.edgeNum()));
+            MultiArray<1, UInt32> edgeCounts_new(Shape1(graph_.edgeNum()));
+            MultiArray<1, SegmentType> nodeSeeds_new(Shape1(graph_.nodeNum()+1), EmptySegmentID);
+            MultiArray<1, SegmentType> resultSegmentation_new(Shape1(graph_.nodeNum()+1), EmptySegmentID);
 
-            // Accumulate the edge weights
-            //std::cout<<"get edge weights\n";
+            edgeWeights_new.subarray(Shape1(0), edgeWeights_.shape()) = edgeWeights_;
+            edgeCounts_new.subarray(Shape1(0), edgeCounts_.shape()) = edgeCounts_;
+            nodeSeeds_new.subarray(Shape1(0), nodeSeeds_.shape()) = nodeSeeds_;
+            resultSegmentation_new.subarray(Shape1(0), resultSegmentation_.shape()) = resultSegmentation_;
+
+            edgeWeights_.swap(edgeWeights_new);
+            edgeCounts_.swap(edgeCounts_new);
+            nodeSeeds_.swap(nodeSeeds_new);
+            resultSegmentation_.swap(resultSegmentation_new);
+
             //TIC;
             graph_.accumulateEdgeFeatures( labels, weightArray, roiEnd
                                          , edgeWeights_, edgeCounts_);
@@ -556,7 +571,6 @@ namespace vigra
         {
             //USETICTOC;
 
-            //std::cout<<"get RAG from serialization\n";
             //TIC;
             // get the RAG
             graph_.assignLabelsFromSerialization(serialization);
@@ -574,6 +588,8 @@ namespace vigra
 
         void run(float bias, float noBiasBelow)
         {
+            std::cout << "running!" << std::endl;
+
 #ifndef NDEBUG
             assert(edgeWeights_.size() == edgeCounts_.size());
 #endif
@@ -596,6 +612,11 @@ namespace vigra
             GridSegmentorNodeMap<SegmentType> nodeSeeds(nodeSeeds_);
             GridSegmentorNodeMap<SegmentType> resultSegmentation(resultSegmentation_);
             GridSegmentorEdgeMap<VALUE_TYPE> edgeWeights(edgeWeights_);
+
+            std::cout << "edgeWeights_.size()" << edgeWeights_.size() << std::endl;
+            std::cout << "nodeSeeds_.size()" << nodeSeeds_.size() << std::endl;
+            std::cout << "graph_.nodeNum()" << graph_.nodeNum() << std::endl;
+            std::cout << "graph_.edgeNum()" << graph_.edgeNum() << std::endl;
 
             carvingSegmentation( graph_, edgeWeights, nodeSeeds, 1
                                , bias, noBiasBelow, resultSegmentation);
