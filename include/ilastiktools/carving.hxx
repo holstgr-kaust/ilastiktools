@@ -173,7 +173,6 @@ namespace vigra
             for(size_t y=0; y<roiEnd[1]; ++y)
             for(size_t x=0; x<roiEnd[0]; ++x)
             {
-                // TODO: do we need to increase label values by 1 to match previous behaviour?
                 const LabelType l  = labels(x, y);
                 if(x+1 < shape[0])
                     maybeAddEdge(l, labels(x+1, y));
@@ -192,7 +191,6 @@ namespace vigra
             for(size_t y=0; y<roiEnd[1]; ++y)
             for(size_t x=0; x<roiEnd[0]; ++x)
             {
-                // TODO: do we need to increase label values by 1 to match previous behaviour?
                 const LabelType l  = labels(x, y, z);
                 if(x+1 < shape[0])
                     maybeAddEdge(l, labels(x+1, y, z));
@@ -472,71 +470,6 @@ namespace vigra
         }
 
         /**
-         * @brief Preprocessing step
-         *
-         * Preprocessing is a stage that creates the segmentation graph from
-         * input labels and weight arrays.  It is designed to support piece-wise
-         * pre-preprocessing provided the following rules are satisfied:
-         *
-         * labels and weightArray (henceforth arrays) are the same dimensions,
-         * The arrays represent the same position in the whole,
-         * A block is the space from the start of the array to its roiEnd,
-         * Non-boundary blocks must include a halo of size 1 on their end regions,
-         *  (e.g., roiEnd[i] < array.shape()[i] for non-edge pieces).
-         * preprocessing is called for all blocks such that each point in the
-         * original space is represented inside an array block once, and only once.
-         *
-         * @param labels Array of per-point label ids.
-         * @param weightArray Array of per-point feature values.
-         * @param roiEnd Specifies the block boundary on the upper side;
-         *          equals array size for blocks on the boundaries of the
-         *          original space, is smaller than the array size otherwise.
-         */
-        template<class WEIGHTS_IN>
-        void preprocessing( const MultiArrayView< DIM, LABELS>& labels
-                          , const MultiArrayView< DIM, WEIGHTS_IN>& weightArray
-                          , const ShapeN& roiEnd)
-        {
-            std::cout << "preprocessing!" << std::endl;
-            std::cout << "labels:" << labels.shape() << std::endl;
-            std::cout << "weightArray:" << weightArray.shape() << std::endl;
-            std::cout << "roiEnd:" << roiEnd << std::endl;
-
-            if (isFinalized_)
-            {
-                throw std::runtime_error("Segmentor is finalized.  Too late to preprocess.");
-            }
-
-            //USETICTOC;
-
-            //TIC;
-            graph_.assignLabels(labels, roiEnd);
-            //TOC;
-
-            // TODO: we should ensure previous values are preserved, and new range is initialized
-            // Use RAG to reshape weights and seeds and resultSegmentation
-            MultiArray<1, VALUE_TYPE> edgeWeights_new(Shape1(graph_.edgeNum()));
-            MultiArray<1, UInt32> edgeCounts_new(Shape1(graph_.edgeNum()));
-            MultiArray<1, SegmentType> nodeSeeds_new(Shape1(graph_.nodeNum()+1), EmptySegmentID);
-            MultiArray<1, SegmentType> resultSegmentation_new(Shape1(graph_.nodeNum()+1), EmptySegmentID);
-
-            edgeWeights_new.subarray(Shape1(0), edgeWeights_.shape()) = edgeWeights_;
-            edgeCounts_new.subarray(Shape1(0), edgeCounts_.shape()) = edgeCounts_;
-            nodeSeeds_new.subarray(Shape1(0), nodeSeeds_.shape()) = nodeSeeds_;
-            resultSegmentation_new.subarray(Shape1(0), resultSegmentation_.shape()) = resultSegmentation_;
-
-            edgeWeights_.swap(edgeWeights_new);
-            edgeCounts_.swap(edgeCounts_new);
-            nodeSeeds_.swap(nodeSeeds_new);
-            resultSegmentation_.swap(resultSegmentation_new);
-
-            //TIC;
-            graph_.accumulateEdgeFeatures( labels, weightArray, roiEnd
-                                         , edgeWeights_, edgeCounts_);
-            //TOC;
-        }
-
-        /**
          * @brief Initialize
          *
          * Initialize segmentor.
@@ -586,10 +519,57 @@ namespace vigra
             isFinalized_ = true;
         }
 
+        /**
+         * @brief Preprocessing step
+         *
+         * Preprocessing is a stage that creates the segmentation graph from
+         * input labels and weight arrays.  It is designed to support piece-wise
+         * pre-preprocessing provided the following rules are satisfied:
+         *
+         * labels and weightArray (henceforth arrays) are the same dimensions,
+         * The arrays represent the same position in the whole,
+         * A block is the space from the start of the array to its roiEnd,
+         * Non-boundary blocks must include a halo of size 1 on their end regions,
+         *  (e.g., roiEnd[i] < array.shape()[i] for non-edge pieces).
+         * preprocessing is called for all blocks such that each point in the
+         * original space is represented inside an array block once, and only once.
+         *
+         * @param labels Array of per-point label ids.
+         * @param weightArray Array of per-point feature values.
+         * @param roiEnd Specifies the block boundary on the upper side;
+         *          equals array size for blocks on the boundaries of the
+         *          original space, is smaller than the array size otherwise.
+         */
+        template<class WEIGHTS_IN>
+        void preprocessing( const MultiArrayView< DIM, LABELS>& labels
+                          , const MultiArrayView< DIM, WEIGHTS_IN>& weightArray
+                          , const ShapeN& roiEnd)
+        {
+            if (isFinalized_)
+            {
+                throw std::runtime_error("Segmentor is finalized.  Too late to preprocess.");
+            }
+
+            //USETICTOC;
+
+            //TIC;
+            graph_.assignLabels(labels, roiEnd);
+            //TOC;
+
+            // Use RAG to reshape weights and seeds and resultSegmentation
+            resizeArray(edgeWeights_, graph_.edgeNum());
+            resizeArray(edgeCounts_, graph_.edgeNum());
+            resizeArray<SegmentType>(nodeSeeds_, graph_.nodeNum()+1, EmptySegmentID);
+            resizeArray<SegmentType>(resultSegmentation_, graph_.nodeNum()+1, EmptySegmentID);
+
+            //TIC;
+            graph_.accumulateEdgeFeatures( labels, weightArray, roiEnd
+                                         , edgeWeights_, edgeCounts_);
+            //TOC;
+        }
+
         void run(float bias, float noBiasBelow)
         {
-            std::cout << "running!" << std::endl;
-
 #ifndef NDEBUG
             assert(edgeWeights_.size() == edgeCounts_.size());
 #endif
@@ -612,11 +592,6 @@ namespace vigra
             GridSegmentorNodeMap<SegmentType> nodeSeeds(nodeSeeds_);
             GridSegmentorNodeMap<SegmentType> resultSegmentation(resultSegmentation_);
             GridSegmentorEdgeMap<VALUE_TYPE> edgeWeights(edgeWeights_);
-
-            std::cout << "edgeWeights_.size()" << edgeWeights_.size() << std::endl;
-            std::cout << "nodeSeeds_.size()" << nodeSeeds_.size() << std::endl;
-            std::cout << "graph_.nodeNum()" << graph_.nodeNum() << std::endl;
-            std::cout << "graph_.edgeNum()" << graph_.edgeNum() << std::endl;
 
             carvingSegmentation( graph_, edgeWeights, nodeSeeds, 1
                                , bias, noBiasBelow, resultSegmentation);
@@ -726,7 +701,6 @@ namespace vigra
                 const int brushLabel = int(*brushIter);
                 const LABELS nodeId = *labelIter;
 
-                //std::cout<<"brush label "<<brushLabel<<"\n";
                 if(    brushLabel == BackgroundSegmentID
                     || brushLabel == ForegroundSegmentID )
                 {
@@ -739,17 +713,17 @@ namespace vigra
             }
         }
 
-        const MultiArray<1 , VALUE_TYPE>& edgeWeights() const
+        const MultiArray<1, VALUE_TYPE>& edgeWeights() const
         {
             return edgeWeights_;
         }
 
-        const MultiArray<1 , SegmentType>& nodeSeeds() const
+        const MultiArray<1, SegmentType>& nodeSeeds() const
         {
             return nodeSeeds_;
         }
 
-        const MultiArray<1 , SegmentType>& resultSegmentation() const
+        const MultiArray<1, SegmentType>& resultSegmentation() const
         {
             return resultSegmentation_;
         }
@@ -818,6 +792,27 @@ namespace vigra
             }
             return true;
         }
+
+        /**
+         * @brief Grows an array in size, preserving previous values, if possible.
+         * @param arr The array to resize
+         * @param size The size to grow array to
+         * @param init Initial element values for new elements in array
+         * @param region Region size
+         */
+        template<class ElemType>
+        void resizeArray(MultiArray<1, ElemType>& arr, size_t size, ElemType init = ElemType(0))
+        {
+            Shape1 nshape = Shape1(size);
+
+            if (nshape == arr.shape())
+                return; // early-out, nothing changes
+
+            MultiArray<1, ElemType> narr(nshape, init);
+            narr.subarray(Shape1(0), arr.shape()) = arr;
+            arr.swap(narr);
+        }
+
 
 
         GridRag<DIM, LABELS> graph_;
