@@ -697,7 +697,8 @@ namespace vigra
             LabelViewIter labelIterEnd(labels.end());
             BrushIter brushIter(brushStroke.begin());
 
-            for(; labelIter<labelIterEnd; ++labelIter,++brushIter){
+            for(; labelIter<labelIterEnd; ++labelIter,++brushIter)
+            {
                 const int brushLabel = int(*brushIter);
                 const LABELS nodeId = *labelIter;
 
