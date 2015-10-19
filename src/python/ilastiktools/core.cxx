@@ -235,9 +235,7 @@ NumpyAnyArray pyNodeSeeds(
     const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
   , NumpyArray<1, UInt8> out )
 {
-    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
-
-    out.reshapeIfEmpty(DifferenceType(gridSegmentor.maxNodeId()+1));
+    out.reshapeIfEmpty(gridSegmentor.nodeSeeds().shape());
     out = gridSegmentor.nodeSeeds();
     return out;
 }
@@ -247,9 +245,7 @@ NumpyAnyArray pyGetResultSegmentation(
     const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
   , NumpyArray<1, UInt8> out )
 {
-    typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
-
-    out.reshapeIfEmpty(DifferenceType(gridSegmentor.maxNodeId()+1));
+    out.reshapeIfEmpty(gridSegmentor.resultSegmentation().shape());
     out = gridSegmentor.resultSegmentation();
     return out;
 }
