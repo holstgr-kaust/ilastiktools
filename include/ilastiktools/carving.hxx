@@ -30,7 +30,7 @@ void validateRegionShape(
           const vigra::TinyVector<vigra::MultiArrayIndex, DIM>& blockShape
         , const vigra::TinyVector<vigra::MultiArrayIndex, DIM>& roiEnd)
 {
-    for (int i = 0; i<DIM; ++i)
+    for (unsigned int i = 0; i<DIM; ++i)
     {
         assert( roiEnd[i] <= blockShape[i] && "Expected roi inside array" );
     }
@@ -49,7 +49,7 @@ void validateEqualShapes(
           const vigra::TinyVector<vigra::MultiArrayIndex, DIM>& shape1
         , const vigra::TinyVector<vigra::MultiArrayIndex, DIM>& shape2)
 {
-    for (int i = 0; i<DIM; ++i)
+    for (unsigned int i = 0; i<DIM; ++i)
     {
         assert( shape1[i] == shape2[i] && "Expected matching shapes" );
     }
@@ -76,7 +76,7 @@ namespace vigra
          * @param lu
          * @param lv
          */
-        int findEdgeFromIds(const LabelType lu, const LabelType lv)
+        index_type findEdgeFromIds(const LabelType lu, const LabelType lv)
         {
             const Edge e  = findEdge(nodeFromId(lu), nodeFromId(lv));
             return id(e);
@@ -87,7 +87,7 @@ namespace vigra
                 , const ShapeN roiEnd)
         {
 #ifndef NDEBUG
-            validateRegionShape(labels.shape(), roiEnd);
+            validateRegionShape<DIM>(labels.shape(), roiEnd);
 #endif
 
             LABELS minLabel, maxLabel;
@@ -139,8 +139,8 @@ namespace vigra
             , MultiArrayView<1, UInt32>& featureCountsOut)
         {
 #ifndef NDEBUG
-            validateRegionShape(labels.shape(), roiEnd);
-            validateRegionShape(featuresIn.shape(), roiEnd);
+            validateRegionShape<DIM>(labels.shape(), roiEnd);
+            validateRegionShape<DIM>(featuresIn.shape(), roiEnd);
             assert(featuresOut.size() == edgeNum());
             assert(featureCountsOut.size() == edgeNum());
 #endif
@@ -245,7 +245,7 @@ namespace vigra
                     const LabelType lv = labels(x+1, y);
                     if(lu!=lv)
                     {
-                        const int eid = findEdgeFromIds(lu, lv);
+                        const index_type eid = findEdgeFromIds(lu, lv);
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x+1,y));
@@ -257,7 +257,7 @@ namespace vigra
                     const LabelType lv = labels(x, y+1);
                     if(lu!=lv)
                     {
-                        const int eid = findEdgeFromIds(lu, lv);
+                        const index_type eid = findEdgeFromIds(lu, lv);
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y+1));
@@ -303,7 +303,7 @@ namespace vigra
                     const LabelType lv = labels(x+1, y, z);
                     if(lu!=lv)
                     {
-                        const int eid = findEdgeFromIds(lu, lv);
+                        const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
                         omp_set_lock(&(edgeLocks[eid]));
                         #endif
@@ -321,7 +321,7 @@ namespace vigra
                     const LabelType lv = labels(x, y+1, z);
                     if(lu!=lv)
                     {
-                        const int eid = findEdgeFromIds(lu, lv);
+                        const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
                         omp_set_lock(&(edgeLocks[eid]));
                         #endif
@@ -339,7 +339,7 @@ namespace vigra
                     const LabelType lv = labels(x, y, z+1);
                     if(lu!=lv)
                     {
-                        const int eid = findEdgeFromIds(lu, lv);
+                        const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
                         omp_set_lock(&(edgeLocks[eid]));
                         #endif
@@ -603,7 +603,7 @@ namespace vigra
             , MultiArrayView<DIM, PIXEL_LABELS>& segmentation) const
         {
 #ifndef NDEBUG
-            validateEqualShapes(labels.shape(), segmentation.shape());
+            validateEqualShapes<DIM>(labels.shape(), segmentation.shape());
 #endif
             typedef MultiArrayView<DIM, PIXEL_LABELS> SegView;
             typedef typename SegView::iterator SegIter;
@@ -688,7 +688,7 @@ namespace vigra
             , const MultiArrayView<DIM, PIXEL_LABELS>& brushStroke )
         {
 #ifndef NDEBUG
-            validateEqualShapes(labels.shape(), brushStroke.shape());
+            validateEqualShapes<DIM>(labels.shape(), brushStroke.shape());
 #endif
             typedef MultiArrayView<DIM, PIXEL_LABELS> BrushView;
             typedef typename BrushView::const_iterator BrushIter;
@@ -699,7 +699,7 @@ namespace vigra
 
             for(; labelIter<labelIterEnd; ++labelIter,++brushIter)
             {
-                const int brushLabel = int(*brushIter);
+                const PIXEL_LABELS brushLabel = *brushIter;
                 const LABELS nodeId = *labelIter;
 
                 if(    brushLabel == BackgroundSegmentID
@@ -763,8 +763,8 @@ namespace vigra
             {
                 ShapeN c;
 
-                // TODO: change int -> size_t or ptrdiff_t?
-                for(int dd=0; dd<DIM; ++dd)
+                // TODO: change unsigned int -> size_t or ptrdiff_t?
+                for(unsigned int dd=0; dd<DIM; ++dd)
                 {
                     // offset coordinates to account of labels offset
                     c[dd] = seedsCoord(dd,i) - labelsOffset[dd];
@@ -786,10 +786,13 @@ namespace vigra
          */
         bool withinRegion(const ShapeN& coord, const ShapeN& region)
         {
-            // TODO: change int -> size_t or ptrdiff_t?
-            for(int dd=0; dd<DIM; ++dd)
+            // TODO: change unsigned int -> size_t or ptrdiff_t?
+            for(unsigned int dd=0; dd<DIM; ++dd)
             {
-                if (coord[dd] >= region[dd]) return false;
+                if (coord[dd] >= region[dd])
+                {
+                    return false;
+                }
             }
             return true;
         }

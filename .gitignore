@@ -1,5 +1,5 @@
 # Per-User configs
-CMakeLists.txt.user
+CMakeLists.txt.user*
 
 # Compiled Object files
 *.slo
