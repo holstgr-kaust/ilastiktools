@@ -9,6 +9,9 @@
 
 #include <assert.h>
 
+// TODO: OpenMP usage is flawed; see TODO notes below
+#undef WITH_OPENMP
+
 #ifdef WITH_OPENMP
     #include <omp.h>
 #endif
@@ -76,7 +79,7 @@ namespace vigra
          * @param lu
          * @param lv
          */
-        index_type findEdgeFromIds(const LabelType lu, const LabelType lv)
+        inline index_type findEdgeFromIds(const LabelType lu, const LabelType lv)
         {
             const Edge e  = findEdge(nodeFromId(lu), nodeFromId(lv));
             return id(e);
@@ -276,10 +279,19 @@ namespace vigra
             , MultiArrayView<1, UInt32>& featureCountsOut)
         {
             // TODO: change size_t -> ptrdiff_t?
+            // TODO: OpenMP locking implementation does not work if there are
+            // multiple callers to calcFeatures (previous implementation assumed
+            // it was only called once since preprocessing would only get called once).
+            // TODO: Fix current implementation (it appears to lock up)
             #ifdef WITH_OPENMP
-            omp_lock_t* edgeLocks = new omp_lock_t[edgeNum()];
+            // NOTE: OMP_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
+            const size_t OMP_LOCKS = 0xFF; // 2^8-1
+
+            std::cout << "CALC FEATURES!" << std::endl;
+
+            omp_lock_t* edgeLocks = new omp_lock_t[OMP_LOCKS + 1];
             #pragma omp parallel for
-            for(size_t i=0; i<edgeNum();++i)
+            for(size_t i=0; i<OMP_LOCKS;++i)
             {
                 omp_init_lock(&(edgeLocks[i]));
             }
@@ -305,13 +317,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x+1,y,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                     }
                 }
@@ -323,13 +335,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y+1,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                     }
                 }
@@ -341,13 +353,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y,z+1));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
                         #endif
                     }
                 }
@@ -356,7 +368,7 @@ namespace vigra
             // TODO: change size_t -> ptrdiff_t?
             #ifdef WITH_OPENMP
             #pragma omp parallel for
-            for(size_t i=0; i<edgeNum();++i)
+            for(size_t i=0; i<OMP_LOCKS;++i)
             {
                 omp_destroy_lock(&(edgeLocks[i]));
             }
@@ -369,7 +381,7 @@ namespace vigra
          * @param lu
          * @param lv
          */
-        void maybeAddEdge(const LabelType lu, const LabelType lv)
+        inline void maybeAddEdge(const LabelType lu, const LabelType lv)
         {
             if(lu != lv)
             {
@@ -403,13 +415,13 @@ namespace vigra
         }
 
         template<class K>
-        Reference operator[](const K key)
+        inline Reference operator[](const K key)
         {
             return values_[key.id()];
         }
 
         template<class K>
-        ConstReference operator[](const K key)const
+        inline ConstReference operator[](const K key)const
         {
             return values_[key.id()];
         }
@@ -430,13 +442,13 @@ namespace vigra
         }
 
         template<class K>
-        Reference operator[](const K key)
+        inline Reference operator[](const K key)
         {
             return values_[key.id()];
         }
 
         template<class K>
-        ConstReference operator[](const K key)const
+        inline ConstReference operator[](const K key)const
         {
             return values_[key.id()];
         }
@@ -631,32 +643,32 @@ namespace vigra
                      , seeds.begin());
         }
 
-        const GridRag<DIM, LABELS>& graph() const
+        inline const GridRag<DIM, LABELS>& graph() const
         {
             return graph_;
         }
 
-        GridRag<DIM, LABELS>& graph()
+        inline GridRag<DIM, LABELS>& graph()
         {
             return graph_;
         }
 
-        size_t nodeNum() const
+        inline size_t nodeNum() const
         {
             return graph_.nodeNum();
         }
 
-        size_t edgeNum() const
+        inline size_t edgeNum() const
         {
             return graph_.edgeNum();
         }
 
-        size_t maxNodeId() const
+        inline size_t maxNodeId() const
         {
             return graph_.maxNodeId();
         }
 
-        size_t maxEdgeId() const
+        inline size_t maxEdgeId() const
         {
             return graph_.maxEdgeId();
         }
@@ -714,22 +726,22 @@ namespace vigra
             }
         }
 
-        const MultiArray<1, VALUE_TYPE>& edgeWeights() const
+        inline const MultiArray<1, VALUE_TYPE>& edgeWeights() const
         {
             return edgeWeights_;
         }
 
-        const MultiArray<1, SegmentType>& nodeSeeds() const
+        inline const MultiArray<1, SegmentType>& nodeSeeds() const
         {
             return nodeSeeds_;
         }
 
-        const MultiArray<1, SegmentType>& resultSegmentation() const
+        inline const MultiArray<1, SegmentType>& resultSegmentation() const
         {
             return resultSegmentation_;
         }
 
-        void clearSegmentation()
+        inline void clearSegmentation()
         {
             resultSegmentation_ = EmptySegmentID;
         }
@@ -784,7 +796,7 @@ namespace vigra
          * @param region Region size
          * @return true if coord is with region, false otherwise
          */
-        bool withinRegion(const ShapeN& coord, const ShapeN& region)
+        inline bool withinRegion(const ShapeN& coord, const ShapeN& region)
         {
             // TODO: change unsigned int -> size_t or ptrdiff_t?
             for(unsigned int dd=0; dd<DIM; ++dd)
@@ -810,7 +822,9 @@ namespace vigra
             Shape1 nshape = Shape1(size);
 
             if (nshape == arr.shape())
-                return; // early-out, nothing changes
+            {
+              return; // early-out, nothing changes
+            }
 
             MultiArray<1, ElemType> narr(nshape, init);
             narr.subarray(Shape1(0), arr.shape()) = arr;
