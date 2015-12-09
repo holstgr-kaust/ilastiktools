@@ -210,15 +210,6 @@ NumpyAnyArray pySerializeGraph(
 }
 
 template<unsigned int DIM, class LABEL_TYPE>
-void pyDeserializeGraph(
-    GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
-  , const NumpyArray<1, UInt32>& serialization )
-{
-    gridSegmentor.graph().clear();
-    gridSegmentor.graph().deserialize(serialization.begin(),serialization.end());
-}
-
-template<unsigned int DIM, class LABEL_TYPE>
 NumpyAnyArray pyEdgeWeights(
     const GridSegmentor<DIM, LABEL_TYPE, float>& gridSegmentor
   , NumpyArray<1, float> out )
@@ -346,11 +337,6 @@ void defineGridSegmentor(const std::string & clsName)
         .def("serializeGraph", registerConverters(&pySerializeGraph<DIM, LABEL_TYPE>),
             (
                 python::arg("out") = python::object()
-            )
-        )
-        .def("deserializeGraph", registerConverters(&pyDeserializeGraph<DIM, LABEL_TYPE>),
-            (
-                python::arg("serialization")
             )
         )
         .def("getEdgeWeights",registerConverters(pyEdgeWeights<DIM, LABEL_TYPE>),
