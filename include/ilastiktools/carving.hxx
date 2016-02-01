@@ -13,8 +13,12 @@
 #undef WITH_OPENMP
 
 #ifdef WITH_OPENMP
-    #include <omp.h>
-#endif
+#include <omp.h>
+
+// NOTE: OMP_EDGE_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
+constexpr size_t OMP_EDGE_LOCKS = 0xFF; // 2^8-1
+
+#endif 
 
 
 namespace
@@ -284,14 +288,11 @@ namespace vigra
             // it was only called once since preprocessing would only get called once).
             // TODO: Fix current implementation (it appears to lock up)
             #ifdef WITH_OPENMP
-            // NOTE: OMP_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
-            const size_t OMP_LOCKS = 0xFF; // 2^8-1
+            std::cout << "CALC EDGE FEATURES!" << std::endl;
 
-            std::cout << "CALC FEATURES!" << std::endl;
-
-            omp_lock_t* edgeLocks = new omp_lock_t[OMP_LOCKS + 1];
+            omp_lock_t* edgeLocks = new omp_lock_t[OMP_EDGE_LOCKS + 1];
             #pragma omp parallel for
-            for(size_t i=0; i<OMP_LOCKS;++i)
+            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
             {
                 omp_init_lock(&(edgeLocks[i]));
             }
@@ -317,13 +318,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x+1,y,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
@@ -335,13 +336,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y+1,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
@@ -353,13 +354,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y,z+1));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_LOCKS]));
+                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
@@ -368,7 +369,7 @@ namespace vigra
             // TODO: change size_t -> ptrdiff_t?
             #ifdef WITH_OPENMP
             #pragma omp parallel for
-            for(size_t i=0; i<OMP_LOCKS;++i)
+            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
             {
                 omp_destroy_lock(&(edgeLocks[i]));
             }

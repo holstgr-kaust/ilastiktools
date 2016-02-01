@@ -65,8 +65,6 @@ IF(PYTHONINTERP_V2_FOUND)
         ADD_DEFINITIONS(-DBOOST_AUTO_LINK_NOMANGLE)
     endif()
 
-FindVIGRANUMPY_DEPENDENCIES.cmake
-
     ######################################################################
     #
     #      find default install directory for Python modules

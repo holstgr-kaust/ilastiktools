@@ -5,11 +5,8 @@
 #  VIGRA_FOUND              - Set to false, or undefined, if vigra isn't found.
 #  VIGRA_INCLUDE_DIR        - Vigra include directory.
 
-# configVersion.hxx only present, after build of Vigra
-FIND_PATH(VIGRA_INCLUDE_DIR vigra/configVersion.hxx PATHS $ENV{VIGRA_ROOT}/include ENV CPLUS_INCLUDE_PATH)
-# TODO: remove version that doesn't work
 # config_version.hxx only present, after build of Vigra
-#FIND_PATH(VIGRA_INCLUDE_DIR vigra/config_version.hxx PATHS $ENV{VIGRA_ROOT}/include ENV CPLUS_INCLUDE_PATH)
+FIND_PATH(VIGRA_INCLUDE_DIR vigra/config_version.hxx PATHS $ENV{VIGRA_ROOT}/include ENV CPLUS_INCLUDE_PATH)
 
 # handle the QUIETLY and REQUIRED arguments and set VIGRA_FOUND to TRUE if
 # all listed variables are TRUE
