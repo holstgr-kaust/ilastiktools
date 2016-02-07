@@ -9,15 +9,8 @@
 
 #include <assert.h>
 
-// TODO: OpenMP usage is flawed; see TODO notes below
-#undef WITH_OPENMP
-
 #ifdef WITH_OPENMP
 #include <omp.h>
-
-// NOTE: OMP_EDGE_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
-constexpr size_t OMP_EDGE_LOCKS = 0xFF; // 2^8-1
-
 #endif 
 
 
@@ -68,6 +61,10 @@ namespace vigra
     template<unsigned int DIM, class LABELS>
     class GridRag : public AdjacencyListGraph
     {
+        #ifdef WITH_OPENMP
+        // NOTE: OMP_EDGE_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
+        static const std::size_t OMP_EDGE_LOCKS = 0xFFF; // 2^12-1
+        #endif
     public:
         typedef GridGraph<DIM, boost_graph::undirected_tag>  GridGraphType;
         typedef LABELS LabelType;
@@ -76,6 +73,26 @@ namespace vigra
 
         GridRag() : AdjacencyListGraph()
         {
+            #ifdef WITH_OPENMP
+            edgeLocks_ = new omp_lock_t[OMP_EDGE_LOCKS + 1];
+            #pragma omp parallel for
+            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
+            {
+              omp_init_lock(&(edgeLocks_[i]));
+            }
+            #endif
+        }
+
+        ~GridRag()
+        {
+            #ifdef WITH_OPENMP
+            #pragma omp parallel for
+            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
+            {
+                omp_destroy_lock(&(edgeLocks_[i]));
+            }
+            delete[] edgeLocks_;
+            #endif
         }
 
         /**
@@ -175,10 +192,9 @@ namespace vigra
         void addEdges( const MultiArrayView<2, LABELS>& labels
                      , const ShapeN& roiEnd)
         {
-            // TODO: change size_t -> ptrdiff_t?
             const ShapeN shape = labels.shape();
-            for(size_t y=0; y<roiEnd[1]; ++y)
-            for(size_t x=0; x<roiEnd[0]; ++x)
+            for(MultiArrayIndex y=0; y<roiEnd[1]; ++y)
+            for(MultiArrayIndex x=0; x<roiEnd[0]; ++x)
             {
                 const LabelType l  = labels(x, y);
                 if(x+1 < shape[0])
@@ -192,11 +208,10 @@ namespace vigra
         void addEdges( const MultiArrayView<3, LABELS>& labels
                      , const ShapeN& roiEnd)
         {
-            // TODO: change size_t -> ptrdiff_t?
             const ShapeN shape = labels.shape();
-            for(size_t z=0; z<roiEnd[2]; ++z)
-            for(size_t y=0; y<roiEnd[1]; ++y)
-            for(size_t x=0; x<roiEnd[0]; ++x)
+            for(MultiArrayIndex z=0; z<roiEnd[2]; ++z)
+            for(MultiArrayIndex y=0; y<roiEnd[1]; ++y)
+            for(MultiArrayIndex x=0; x<roiEnd[0]; ++x)
             {
                 const LabelType l  = labels(x, y, z);
                 if(x+1 < shape[0])
@@ -240,10 +255,9 @@ namespace vigra
         {
             const ShapeN shape = labels.shape();
 
-            // TODO: change size_t -> ptrdiff_t?
             //do the accumulation
-            for(size_t y=0; y<roiEnd[1]; ++y)
-            for(size_t x=0; x<roiEnd[0]; ++x)
+            for(MultiArrayIndex y=0; y<roiEnd[1]; ++y)
+            for(MultiArrayIndex x=0; x<roiEnd[0]; ++x)
             {
                 const LabelType lu  = labels(x, y);
 
@@ -282,32 +296,15 @@ namespace vigra
             , MultiArrayView<1, WEIGHTS_OUT >& featuresOut
             , MultiArrayView<1, UInt32>& featureCountsOut)
         {
-            // TODO: change size_t -> ptrdiff_t?
-            // TODO: OpenMP locking implementation does not work if there are
-            // multiple callers to calcFeatures (previous implementation assumed
-            // it was only called once since preprocessing would only get called once).
-            // TODO: Fix current implementation (it appears to lock up)
-            #ifdef WITH_OPENMP
-            std::cout << "CALC EDGE FEATURES!" << std::endl;
-
-            omp_lock_t* edgeLocks = new omp_lock_t[OMP_EDGE_LOCKS + 1];
-            #pragma omp parallel for
-            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
-            {
-                omp_init_lock(&(edgeLocks[i]));
-            }
-            #endif
-
             const ShapeN shape = labels.shape();
 
-            // TODO: change size_t -> ptrdiff_t?
             //do the accumulation
             #ifdef WITH_OPENMP
             #pragma omp parallel for
             #endif
-            for(size_t z=0; z<roiEnd[2]; ++z)
-            for(size_t y=0; y<roiEnd[1]; ++y)
-            for(size_t x=0; x<roiEnd[0]; ++x)
+            for(MultiArrayIndex z=0; z<roiEnd[2]; ++z)
+            for(MultiArrayIndex y=0; y<roiEnd[1]; ++y)
+            for(MultiArrayIndex x=0; x<roiEnd[0]; ++x)
             {
                 const LabelType lu  = labels(x, y, z);
 
@@ -318,13 +315,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_set_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x+1,y,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_unset_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
@@ -336,13 +333,13 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_set_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y+1,z));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_unset_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
@@ -354,27 +351,17 @@ namespace vigra
                     {
                         const index_type eid = findEdgeFromIds(lu, lv);
                         #ifdef WITH_OPENMP
-                        omp_set_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_set_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                         featureCountsOut[eid] += 2;
                         featuresOut[eid] += static_cast<WEIGHTS_OUT>(featuresIn(x,y,z))
                                           + static_cast<WEIGHTS_OUT>(featuresIn(x,y,z+1));
                         #ifdef WITH_OPENMP
-                        omp_unset_lock(&(edgeLocks[eid & OMP_EDGE_LOCKS]));
+                        omp_unset_lock(&(edgeLocks_[eid & OMP_EDGE_LOCKS]));
                         #endif
                     }
                 }
             }
-
-            // TODO: change size_t -> ptrdiff_t?
-            #ifdef WITH_OPENMP
-            #pragma omp parallel for
-            for(size_t i=0; i<OMP_EDGE_LOCKS;++i)
-            {
-                omp_destroy_lock(&(edgeLocks[i]));
-            }
-            delete[] edgeLocks;
-            #endif
         }
 
         /**
@@ -401,6 +388,11 @@ namespace vigra
                 addNode(id);
             }
         }
+
+    private:
+    #ifdef WITH_OPENMP
+        omp_lock_t* edgeLocks_;
+    #endif
     };
 
     template<class T>
@@ -590,12 +582,11 @@ namespace vigra
             {
                 isFinalized_ = true;
 
-                // TODO: change size_t -> ptrdiff_t?
                 // Normalize edgeWeights
                 #ifdef WITH_OPENMP
                 #pragma omp parallel for
                 #endif
-                for(size_t i=0; i<edgeWeights_.size(); ++i)
+                for(MultiArrayIndex i=0; i<edgeWeights_.size(); ++i)
                 {
                     edgeWeights_[i] /= edgeCounts_[i];
                     edgeCounts_[i] = 1;
@@ -654,33 +645,32 @@ namespace vigra
             return graph_;
         }
 
-        inline size_t nodeNum() const
+        inline AdjacencyListGraph::index_type nodeNum() const
         {
             return graph_.nodeNum();
         }
 
-        inline size_t edgeNum() const
+        inline AdjacencyListGraph::index_type edgeNum() const
         {
             return graph_.edgeNum();
         }
 
-        inline size_t maxNodeId() const
+        inline AdjacencyListGraph::index_type maxNodeId() const
         {
             return graph_.maxNodeId();
         }
 
-        inline size_t maxEdgeId() const
+        inline AdjacencyListGraph::index_type maxEdgeId() const
         {
             return graph_.maxEdgeId();
         }
 
         void clearSeeds()
         {
-            // TODO: change size_t -> ptrdiff_t?
             #ifdef WITH_OPENMP
             #pragma omp parallel for
             #endif
-            for(size_t i=0; i<nodeNum();++i)
+            for(AdjacencyListGraph::index_type i=0; i<nodeNum();++i)
             {
                 nodeSeeds_[i] = EmptySegmentID;
             }
@@ -750,8 +740,7 @@ namespace vigra
         void setResulFgObj(const MultiArray<1, Int64>& fgNodes )
         {
             resultSegmentation_ = BackgroundSegmentID;
-            // TODO: change size_t -> ptrdiff_t?
-            for(size_t i=0; i<fgNodes.shape(0); ++i)
+            for(MultiArrayIndex i=0; i<fgNodes.shape(0); ++i)
             {
                 resultSegmentation_[fgNodes(i)] = ForegroundSegmentID;
             }
@@ -771,13 +760,11 @@ namespace vigra
                     , const ShapeN& labelsOffset
                     , const MultiArray<2, Int64>& seedsCoord)
         {
-            // TODO: change size_t -> ptrdiff_t?
-            for(size_t i=0; i<seedsCoord.shape(1); ++i)
+            for(MultiArrayIndex i=0; i<seedsCoord.shape(1); ++i)
             {
                 ShapeN c;
 
-                // TODO: change unsigned int -> size_t or ptrdiff_t?
-                for(unsigned int dd=0; dd<DIM; ++dd)
+                for(std::ptrdiff_t dd=0; dd<DIM; ++dd)
                 {
                     // offset coordinates to account of labels offset
                     c[dd] = seedsCoord(dd,i) - labelsOffset[dd];
@@ -785,7 +772,7 @@ namespace vigra
 
                 if (withinRegion(c, labels.shape()))
                 {
-                    const UInt64 node = labels[c];
+                    const MultiArrayIndex node = labels[c];
                     nodeSeeds_[node] = SeedVal;
                 }
             }
@@ -799,8 +786,7 @@ namespace vigra
          */
         inline bool withinRegion(const ShapeN& coord, const ShapeN& region)
         {
-            // TODO: change unsigned int -> size_t or ptrdiff_t?
-            for(unsigned int dd=0; dd<DIM; ++dd)
+            for(std::ptrdiff_t dd=0; dd<DIM; ++dd)
             {
                 if (coord[dd] >= region[dd])
                 {

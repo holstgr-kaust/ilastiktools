@@ -17,9 +17,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 include(ILASTIKTOOLS_ADD_NUMPY_MODULE)
 
 project(ilastiktools)
-set (ILASTIKTOOLS_VERSION_MAJOR 0)
-set (ILASTIKTOOLS_VERSION_MINOR 2)
-set (ILASTIKTOOLS_VERSION_PATCH 1)
+set (ILASTIKTOOLS_VERSION_MAJOR 1)
+set (ILASTIKTOOLS_VERSION_MINOR 0)
+set (ILASTIKTOOLS_VERSION_PATCH 0)
 
 #--------------------------------------------------------
 # enable_testing
