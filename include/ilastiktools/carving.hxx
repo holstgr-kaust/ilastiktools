@@ -63,7 +63,10 @@ namespace vigra
     {
         #ifdef WITH_OPENMP
         // NOTE: OMP_EDGE_LOCKS must equal (2^x)-1; i.e., it must be a mask and a (count - 1).
-        static const std::size_t OMP_EDGE_LOCKS = 0xFFF; // 2^12-1
+        // TODO: NOTE: Encountered issue where all threads were suspended with large OMP_EDGE_LOCKS
+        //             Suspect thread contention between OMP in ilastiktools, and threads in lazyflow;
+        //             It works with a smaller lock pool.
+        static const std::size_t OMP_EDGE_LOCKS = 0x7F; //2^7-1 //0xFFF; // 2^12-1
         #endif
     public:
         typedef GridGraph<DIM, boost_graph::undirected_tag>  GridGraphType;
