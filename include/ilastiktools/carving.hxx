@@ -519,8 +519,7 @@ namespace vigra
 
             // Assign weights and seeds and resultSegmentation
             edgeWeights_ = edgeWeights;
-            edgeCounts_.reshape(edgeWeights.shape());
-            edgeCounts_ = 1;
+            edgeCounts_.reshape(Shape1(0));
             nodeSeeds_ = nodeSeeds;
             resultSegmentation_ = resultSegmentation;
 
@@ -576,25 +575,34 @@ namespace vigra
             //TOC;
         }
 
+        void finalize()
+        {
+          if (!isFinalized_)
+          {
+#ifndef NDEBUG
+          assert(edgeWeights_.size() == edgeCounts_.size());
+#endif
+              isFinalized_ = true;
+
+              // Normalize edgeWeights
+              #ifdef WITH_OPENMP
+              #pragma omp parallel for
+              #endif
+              for(MultiArrayIndex i=0; i<edgeWeights_.size(); ++i)
+              {
+                  edgeWeights_[i] /= edgeCounts_[i];
+              }
+              edgeCounts_.reshape(Shape1(0));
+          }
+
+#ifndef NDEBUG
+          assert(isFinalized_ && edgeCounts_.size() == 0L);
+#endif
+        }
+
         void run(float bias, float noBiasBelow)
         {
-#ifndef NDEBUG
-            assert(edgeWeights_.size() == edgeCounts_.size());
-#endif
-            if (!isFinalized_)
-            {
-                isFinalized_ = true;
-
-                // Normalize edgeWeights
-                #ifdef WITH_OPENMP
-                #pragma omp parallel for
-                #endif
-                for(MultiArrayIndex i=0; i<edgeWeights_.size(); ++i)
-                {
-                    edgeWeights_[i] /= edgeCounts_[i];
-                    edgeCounts_[i] = 1;
-                }
-            }
+            finalize();
 
             GridSegmentorNodeMap<SegmentType> nodeSeeds(nodeSeeds_);
             GridSegmentorNodeMap<SegmentType> resultSegmentation(resultSegmentation_);
@@ -747,6 +755,11 @@ namespace vigra
             {
                 resultSegmentation_[fgNodes(i)] = ForegroundSegmentID;
             }
+        }
+
+        inline bool isFinalized() const
+        {
+          return isFinalized_;
         }
 
     private:

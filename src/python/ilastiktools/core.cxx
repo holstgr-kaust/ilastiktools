@@ -216,6 +216,8 @@ NumpyAnyArray pyEdgeWeights(
 {
     typedef NumpyArray<1, UInt32>::difference_type DifferenceType;
 
+    assert(gridSegmentor.isFinalized()); // weights were not scaled correctly
+
     out.reshapeIfEmpty(DifferenceType(gridSegmentor.edgeNum()));
     out = gridSegmentor.edgeWeights();
     return out;
@@ -334,6 +336,8 @@ void defineGridSegmentor(const std::string & clsName)
         .def("maxNodeId",&Segmentor::maxNodeId)
         .def("maxEdgeId",&Segmentor::maxEdgeId)
         .def("run",&Segmentor::run)
+        .def("finalize",&Segmentor::finalize)
+        .def("isFinalized",&Segmentor::isFinalized)
         .def("serializeGraph", registerConverters(&pySerializeGraph<DIM, LABEL_TYPE>),
             (
                 python::arg("out") = python::object()
