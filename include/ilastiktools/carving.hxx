@@ -804,7 +804,7 @@ namespace vigra
         {
             for(std::ptrdiff_t dd=0; dd<DIM; ++dd)
             {
-                if (coord[dd] >= region[dd])
+                if (coord[dd] < 0 || coord[dd] >= region[dd])
                 {
                     return false;
                 }
